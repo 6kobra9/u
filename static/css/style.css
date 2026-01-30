@@ -305,6 +305,182 @@ header h1 {
     align-items: center;
 }
 
+.view-toggle-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 8px;
+}
+.view-toggle-label {
+    font-size: 14px;
+    color: #4a4032;
+}
+.btn-toggle {
+    padding: 6px 12px;
+    font-size: 13px;
+    border: 1px solid #4a4032;
+    background: #f5f0e8;
+    color: #4a4032;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.btn-toggle:hover {
+    background: #ebe5dc;
+}
+.btn-toggle.active {
+    background: #4a4032;
+    color: #fff;
+}
+
+.tree-container {
+    flex: 1;
+    min-height: 0;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 16px;
+    background: #faf9f7;
+    border: 1px solid #e5e0d9;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(74, 64, 50, 0.06);
+}
+.tree-toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-shrink: 0;
+}
+.tree-toolbar .btn-tree-toggle {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    background: #fff;
+    color: #4a4032;
+    border: 1px solid #d0c9c0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.tree-toolbar .btn-tree-toggle:hover {
+    background: #f5f0e8;
+    border-color: #c4beb5;
+    box-shadow: 0 1px 2px rgba(74, 64, 50, 0.08);
+}
+.tree-toolbar .btn-tree-toggle:active {
+    background: #ebe5dc;
+}
+.tree-container #treeLoading,
+.tree-container .structure-tree {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+/* ——— Сучасний вигляд дерева ——— */
+.structure-tree {
+    font-size: 14px;
+    color: #2d2a26;
+    --tree-line: #c4beb5;
+    --tree-bg-hover: #f8f6f3;
+    --tree-bg-active: #ebe5dc;
+    --tree-accent: #5a5248;
+}
+.structure-tree .tree-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    position: relative;
+}
+.structure-tree .tree-list ul {
+    list-style: none;
+    margin: 0;
+    padding-left: 24px;
+    position: relative;
+    border-left: 1px solid var(--tree-line);
+    margin-left: 11px;
+}
+.structure-tree .tree-node {
+    margin: 0;
+    position: relative;
+}
+.structure-tree .tree-node-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    padding: 10px 14px;
+    border-radius: 8px;
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+    min-height: 40px;
+    border: 1px solid transparent;
+}
+.structure-tree .tree-node-inner:hover {
+    background: var(--tree-bg-hover);
+    border-color: var(--tree-line);
+}
+.structure-tree .tree-node:focus-within .tree-node-inner,
+.structure-tree .tree-node-inner:active {
+    background: var(--tree-bg-active);
+}
+.structure-tree .tree-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    color: var(--tree-accent);
+    transition: transform 0.2s ease;
+    border-radius: 4px;
+}
+.structure-tree .tree-toggle:hover {
+    background: rgba(74, 64, 50, 0.08);
+}
+.structure-tree .tree-chevron {
+    font-size: 10px;
+    display: inline-block;
+    transition: transform 0.2s ease;
+}
+.structure-tree .tree-chevron--leaf {
+    width: 0;
+    visibility: hidden;
+}
+.structure-tree .tree-node--closed .tree-chevron:not(.tree-chevron--leaf) {
+    transform: rotate(-90deg);
+}
+.structure-tree .tree-toggle--empty {
+    visibility: hidden;
+    pointer-events: none;
+}
+.structure-tree .tree-node--closed .tree-children {
+    display: none;
+}
+.structure-tree .tree-children {
+    padding-left: 0;
+    margin-left: 0;
+    border-left: none;
+}
+.structure-tree .tree-children .tree-list {
+    padding-left: 24px;
+    margin-left: 11px;
+    border-left: 1px solid var(--tree-line);
+}
+.structure-tree .tree-label {
+    flex: 1;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    word-break: break-word;
+}
+.structure-tree .tree-node--leaf .tree-label {
+    font-weight: 400;
+}
+.structure-tree .tree-empty {
+    color: #6b6358;
+    padding: 24px;
+    font-size: 14px;
+}
+
 .edit-btn, .delete-btn {
     background: none;
     border: none;
@@ -432,30 +608,24 @@ header h1 {
     min-height: 0;
     position: relative;
     max-height: 100%;
-    padding-bottom: 100px;
     box-sizing: border-box;
-    scroll-padding-bottom: 50px;
 }
 
 
 .table-footer {
     background-color: #f5f0e8;
     border-top: 1px solid #4a4032;
-    padding: 4px 12px;
+    padding: 8px 12px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-radius: 8px;
+    border-radius: 0 0 8px 8px;
     font-size: 12px;
     color: #4a4032;
     font-weight: 400;
     flex-shrink: 0;
-    position: sticky;
-    bottom: 0;
-    z-index: 100;
     width: 100%;
-    box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
-    min-height: 32px;
+    min-height: 36px;
 }
 
 .table-footer span {
@@ -512,6 +682,20 @@ header h1 {
 .search-row td {
     background: #ebe5dc;
     padding: 4px 8px;
+}
+
+.search-filter-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.search-filter-cell .search-select {
+    min-width: 0;
+}
+
+.search-filter-cell .search-input {
+    min-width: 0;
 }
 
 .data-table th {

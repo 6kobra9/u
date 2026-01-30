@@ -150,12 +150,16 @@ def get_table_data_for_select(table_name):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Получаем данные с id и name
-        cursor.execute(f"SELECT id, name FROM [{table_name}] ORDER BY name")
-        rows = cursor.fetchall()
+        # Для unit показуємо off_name замість name
+        if table_name.lower() == 'unit':
+            cursor.execute("SELECT id, off_name FROM [unit] ORDER BY off_name")
+            rows = cursor.fetchall()
+            data = [{'id': row[0], 'off_name': row[1] if row[1] is not None else ''} for row in rows]
+        else:
+            cursor.execute(f"SELECT id, name FROM [{table_name}] ORDER BY name")
+            rows = cursor.fetchall()
+            data = [{'id': row[0], 'name': row[1]} for row in rows]
         conn.close()
-        
-        data = [{'id': row[0], 'name': row[1]} for row in rows]
         
         return jsonify({
             'success': True,
@@ -202,6 +206,31 @@ def execute_query():
             data.append(row_dict)
         
         return jsonify({'success': True, 'columns': columns, 'data': data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/structure-tree')
+def get_structure_tree():
+    """Повертає ієрархію підпорядкування (id, parent_id, name) для деревоподібної схеми."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT s.unit_id, s.parent_id, u.off_name AS name
+            FROM subordination s
+            JOIN unit u ON u.id = s.unit_id
+            ORDER BY s.parent_id, s.unit_id
+        """)
+        rows = cursor.fetchall()
+        conn.close()
+        data = []
+        for row in rows:
+            data.append({
+                'id': row[0],
+                'parent_id': row[1],
+                'name': row[2] or ''
+            })
+        return jsonify({'success': True, 'data': data})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -652,8 +681,7 @@ def upload_excel():
                 
                 cursor.execute(insert_sql, values)
                 rows_loaded += 1
-            except Exception as e:
-                # Пропускаємо рядки з помилками, але продовжуємо
+            except Exception as e: 
                 continue
         
         conn.commit()

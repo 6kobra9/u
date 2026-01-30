@@ -26,7 +26,7 @@
                                 <div class="mega-menu-column">
                                     <h3 class="mega-menu-title">ВО</h3>
                                     <ul class="mega-menu-list">
-                                    <li><a href="#">ВО</a></li>
+                                    <li><a href="#">ВО загальні</a></li>
                                     <li><a href="#">ВО нрк</a></li>
                                     </ul>
                                 </div>
@@ -66,15 +66,28 @@
                     <div class="panel-header">
                         <h2 id="panelTitle">Дані</h2>
                         <div class="panel-actions">
+                            <div id="viewToggleWrap" class="view-toggle-wrap" style="display: none;">
+                                <span class="view-toggle-label">Вид:</span>
+                                <button type="button" id="viewTableBtn" class="btn btn-toggle active">Таблиця</button>
+                                <button type="button" id="viewTreeBtn" class="btn btn-toggle">Дерево</button>
+                            </div>
                             <button id="exportExcelBtn" class="btn btn-secondary">Експорт в Excel</button>
                             <button id="addRowBtn" class="btn btn-primary">+ Додати рядок</button>
                         </div>
                     </div>
-                    <div class="table-container">
+                    <div class="table-container" id="tableContainer">
                         <table id="dataTable" class="data-table">
                             <thead id="tableHead"></thead>
                             <tbody id="tableBody"></tbody>
                         </table>
+                    </div>
+                    <div id="treeContainer" class="tree-container" style="display: none;">
+                        <div class="tree-toolbar">
+                            <button type="button" id="treeExpandAll" class="btn btn-tree-toggle">Розгорнути все</button>
+                            <button type="button" id="treeCollapseAll" class="btn btn-tree-toggle">Згорнути все</button>
+                        </div>
+                        <div id="treeLoading" class="loading" style="display: none;">Завантаження дерева...</div>
+                        <div id="structureTree" class="structure-tree"></div>
                     </div>
                     <div class="table-footer" id="tableFooter">
                         <span id="recordCount">Загальна кількість: 0</span>
@@ -92,7 +105,6 @@
                 <form id="editForm">
                     <div id="editFields"></div>
                     <div class="modal-buttons">
-                        <button type="button" class="btn btn-secondary" id="cancelEditBtn">Скасувати</button>
                         <button type="submit" class="btn btn-primary">Зберегти</button>
                     </div>
                 </form>

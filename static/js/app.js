@@ -18,12 +18,13 @@ document.addEventListener('DOMContentLoaded', function() {
 function setupEventListeners() {
      
     document.getElementById('addRowBtn').addEventListener('click', () => openEditModal(null));
-    // Кнопка "Скасувати" тепер просто очищає форму, але не закриває модальне вікно
-    document.getElementById('cancelEditBtn').addEventListener('click', () => {
-        document.getElementById('editForm').reset();
-    });
     document.getElementById('closeEditModal').addEventListener('click', closeEditModal);
     document.getElementById('editForm').addEventListener('submit', handleSave);
+
+    const viewTableBtn = document.getElementById('viewTableBtn');
+    const viewTreeBtn = document.getElementById('viewTreeBtn');
+    if (viewTableBtn) viewTableBtn.addEventListener('click', showTableView);
+    if (viewTreeBtn) viewTreeBtn.addEventListener('click', showTreeView);
 
     // Обробка кліку на пункти меню
     document.querySelectorAll('.nav-item, .nav-link').forEach(item => {
@@ -94,7 +95,7 @@ function setupEventListeners() {
         }
     });
 
-    // Модальне вікно для повідомлень
+   
     const closeButtons = document.querySelectorAll('.close');
     closeButtons.forEach(btn => {
         btn.addEventListener('click', function() {
@@ -109,11 +110,8 @@ function setupEventListeners() {
         });
     });
     
-    // Убрано закрытие модальных окон по клику на фон
-    // Все модальные окна теперь закрываются только по крестику
 }
 
-// Експорт поточної таблиці в Excel (справжній .xlsx через бібліотеку XLSX)
 function exportTableToExcel() {
     if (!window.tableData || !window.tableColumns || window.tableColumns.length === 0) {
         showModal('Немає даних для експорту', 'error');
@@ -125,8 +123,6 @@ function exportTableToExcel() {
         return;
     }
 
-    // Беремо заголовки з поточної шапки таблиці,
-    // щоб використовувати україномовні назви з UI
     const headerCells = Array.from(
         document.querySelectorAll('#tableHead th[data-column]')
     );
@@ -151,8 +147,13 @@ function exportTableToExcel() {
     // Перший рядок – заголовки
     sheetData.push(headers.map(h => h.title));
 
-    // Рядки даних
-    window.tableData.forEach(row => {
+    // Рядки даних: експортуємо саме те, що зараз відображається (відфільтровані дані), без колонки Дії
+    const dataToExport = window.displayedTableData !== undefined ? window.displayedTableData : window.tableData;
+    if (!dataToExport || dataToExport.length === 0) {
+        showModal('Немає даних для експорту (таблиця порожня або відфільтровано 0 рядків)', 'error');
+        return;
+    }
+    dataToExport.forEach(row => {
         const rowArr = headers.map(h => {
             let value = row[h.key];
             if (value === null || value === undefined) value = '';
@@ -268,14 +269,25 @@ async function handleMenuItemClick(menuItem) {
     // Показуємо панель
     const dataPanel = document.getElementById('dataPanel');
     const panelTitle = document.getElementById('panelTitle');
-    
+    const viewToggleWrap = document.getElementById('viewToggleWrap');
+    const tableContainer = document.getElementById('tableContainer');
+    const treeContainer = document.getElementById('treeContainer');
+
     panelTitle.textContent = menuItem;
     dataPanel.style.display = 'block';
-    
-    // Спеціальна обробка для "Загальна" та "ВО"
+
+    // Перемикач "Таблиця / Дерево" тільки для структури
+    const isStructureView = menuItem === 'Загальна' || menuItem === 'Структура НРК';
+    if (viewToggleWrap) viewToggleWrap.style.display = isStructureView ? '' : 'none';
+    if (tableContainer) tableContainer.style.display = '';
+    if (treeContainer) treeContainer.style.display = 'none';
+    document.getElementById('viewTableBtn')?.classList.add('active');
+    document.getElementById('viewTreeBtn')?.classList.remove('active');
+
+   
     if (menuItem === 'Загальна') {
         await loadCustomQuery();
-    } else if (menuItem === 'ВО') {
+    } else if (menuItem === 'ВО загальні') {
         await loadVOQuery();
     } else if (menuItem === 'ВО нрк') {
         await loadVONRKQuery();
@@ -296,7 +308,137 @@ async function handleMenuItemClick(menuItem) {
     }
 }
 
-// Завантаження даних для ВО
+// ——— Деревоподібна схема структури ———
+function buildTreeFromFlat(flatData) {
+    if (!flatData || !flatData.length) return [];
+    const byId = new Map();
+    flatData.forEach(row => {
+        byId.set(row.id, { id: row.id, parent_id: row.parent_id, name: row.name || '', children: [] });
+    });
+    const roots = [];
+    flatData.forEach(row => {
+        const node = byId.get(row.id);
+        if (!node) return;
+        const parentId = row.parent_id;
+        if (parentId == null || parentId === '' || !byId.has(parentId)) {
+            roots.push(node);
+        } else {
+            const parent = byId.get(parentId);
+            if (parent) parent.children.push(node);
+            else roots.push(node);
+        }
+    });
+    roots.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    roots.forEach(n => sortTreeChildren(n));
+    return roots;
+}
+function sortTreeChildren(node) {
+    if (node.children && node.children.length) {
+        node.children.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        node.children.forEach(sortTreeChildren);
+    }
+}
+function renderTreeHtml(nodes) {
+    if (!nodes || !nodes.length) return '';
+    let html = '<ul class="tree-list">';
+    nodes.forEach((node, i) => {
+        const hasChildren = node.children && node.children.length > 0;
+        const toggleClass = hasChildren ? 'tree-toggle' : 'tree-toggle tree-toggle--empty';
+        const nodeClass = hasChildren ? 'tree-node' : 'tree-node tree-node--leaf';
+        const chevron = hasChildren ? '<span class="tree-chevron" aria-hidden="true">▶</span>' : '<span class="tree-chevron tree-chevron--leaf" aria-hidden="true"></span>';
+        html += `<li class="${nodeClass}" data-id="${node.id}">
+          <div class="tree-node-inner">
+            <span class="${toggleClass}">${chevron}</span>
+            <span class="tree-label">${escapeHtml(node.name)}</span>
+          </div>
+          ${hasChildren ? `<div class="tree-children">${renderTreeHtml(node.children)}</div>` : ''}
+        </li>`;
+    });
+    html += '</ul>';
+    return html;
+}
+function escapeHtml(s) {
+    if (s == null) return '';
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+}
+function attachTreeToggleListeners(container) {
+    if (!container) return;
+    container.querySelectorAll('.tree-node').forEach(nodeEl => {
+        const toggle = nodeEl.querySelector('.tree-toggle');
+        const children = nodeEl.querySelector('.tree-children');
+        if (toggle && children) {
+            toggle.addEventListener('click', function (e) {
+                e.stopPropagation();
+                nodeEl.classList.toggle('tree-node--closed');
+            });
+        }
+        const inner = nodeEl.querySelector('.tree-node-inner');
+        if (inner) {
+            inner.addEventListener('click', function () {
+                if (children) nodeEl.classList.toggle('tree-node--closed');
+            });
+        }
+    });
+}
+function attachTreeExpandCollapseAll(treeEl) {
+    const btnExpand = document.getElementById('treeExpandAll');
+    const btnCollapse = document.getElementById('treeCollapseAll');
+    if (!treeEl || !btnExpand || !btnCollapse) return;
+    btnExpand.onclick = function () {
+        treeEl.querySelectorAll('.tree-node').forEach(el => {
+            if (el.querySelector('.tree-children')) el.classList.remove('tree-node--closed');
+        });
+    };
+    btnCollapse.onclick = function () {
+        treeEl.querySelectorAll('.tree-node').forEach(el => {
+            if (el.querySelector('.tree-children')) el.classList.add('tree-node--closed');
+        });
+    };
+}
+async function loadStructureTreeView() {
+    const treeContainer = document.getElementById('treeContainer');
+    const treeEl = document.getElementById('structureTree');
+    const treeLoading = document.getElementById('treeLoading');
+    const tableContainer = document.getElementById('tableContainer');
+    if (!treeContainer || !treeEl) return;
+    treeContainer.style.display = '';
+    if (tableContainer) tableContainer.style.display = 'none';
+    treeEl.innerHTML = '';
+    treeLoading.style.display = 'block';
+    try {
+        const res = await fetch('/api/structure-tree');
+        const data = await res.json();
+        treeLoading.style.display = 'none';
+        if (data.success && data.data && data.data.length) {
+            const roots = buildTreeFromFlat(data.data);
+            treeEl.innerHTML = renderTreeHtml(roots);
+            attachTreeToggleListeners(treeEl);
+            attachTreeExpandCollapseAll(treeEl);
+        } else {
+            treeEl.innerHTML = '<p class="tree-empty">Немає даних для дерева або помилка: ' + (data.error || 'порожній відповідь') + '</p>';
+        }
+    } catch (e) {
+        treeLoading.style.display = 'none';
+        treeEl.innerHTML = '<p class="tree-empty">Помилка завантаження: ' + e.message + '</p>';
+    }
+}
+function showTableView() {
+    const tableContainer = document.getElementById('tableContainer');
+    const treeContainer = document.getElementById('treeContainer');
+    if (tableContainer) tableContainer.style.display = '';
+    if (treeContainer) treeContainer.style.display = 'none';
+    document.getElementById('viewTableBtn')?.classList.add('active');
+    document.getElementById('viewTreeBtn')?.classList.remove('active');
+}
+function showTreeView() {
+    document.getElementById('viewTableBtn')?.classList.remove('active');
+    document.getElementById('viewTreeBtn')?.classList.add('active');
+    loadStructureTreeView();
+}
+
+// Завантаження даних для ВО загальні (той самий запит що й ВО НРК)
 async function loadVOQuery() {
     const tableHead = document.getElementById('tableHead');
     const tableBody = document.getElementById('tableBody');
@@ -305,11 +447,41 @@ async function loadVOQuery() {
     tableBody.innerHTML = '';
 
     try {
-        const query = `SELECT cp.id, cp.firstname, cp.middlename, cp.surname, cp.mil_name, cp.phone, r.name AS rank_name, p.name AS position_name, u.name AS unit_name, u.off_name AS unit_off_name
-        FROM contact_person cp
-        LEFT JOIN rank r ON r.id = cp.rank_id
-        LEFT JOIN position p ON p.id = cp.position_id
-        LEFT JOIN unit u ON u.id = cp.unit_id`;
+        const query = `SELECT 
+    uu.off_name AS l1,
+    u.off_name  AS l2,
+    bs.type_bps,
+    tt.*
+FROM subordination s
+LEFT JOIN unit u  ON u.id = s.unit_id
+LEFT JOIN unit uu ON uu.id = s.parent_id
+LEFT JOIN bps_structure bs ON bs.unit_id = u.id
+LEFT JOIN (
+    SELECT 
+        cp.id,
+        cp.firstname,
+        cp.middlename,
+        cp.surname,
+        cp.mil_name,
+        cp.phone,
+        cp.phone2,
+        cp.phone3,
+        r.name AS rank,
+        p.name AS position,
+        u.off_name AS v4,
+        uu.off_name AS v4_verh,
+        uuu.off_name AS v4_verh2,
+        cp.comment
+    FROM contact_person cp 
+    LEFT JOIN position p ON cp.position_id = p.id
+    LEFT JOIN rank r ON r.id = cp.rank_id
+    LEFT JOIN unit u ON u.id = cp.unit_id
+    LEFT JOIN subordination s ON s.unit_id = u.id
+    LEFT JOIN unit uu ON uu.id = s.parent_id
+    LEFT JOIN subordination ss ON ss.unit_id = uu.id
+    LEFT JOIN unit uuu ON uuu.id = ss.parent_id
+    WHERE u.comment NOT LIKE N'%морська%'
+) tt ON tt.v4 = u.off_name`;
         
         const response = await fetch('/api/query', {
             method: 'POST',
@@ -335,16 +507,81 @@ async function loadVOQuery() {
             // Зберігаємо дані для фільтрації та сортування
             window.tableData = data.data;
             
-            // Приховуємо технічне поле ID та unit_structure1_id з відображення, але залишаємо в даних
-            const visibleColumns = data.columns.filter(col => {
+            // Формуємо порядок і набір видимих колонок (як у ВО НРК)
+            const rawColumns = data.columns.filter(col => {
                 const name = col.toLowerCase();
-                return name !== 'id' && name !== 'unit_structure1_id';
+                return name !== 'id' && name !== 'v4' && name !== 'v4_verh' && name !== 'comment';
+            });
+
+            const preferredOrder = [
+                'v4_verh2',   // Структура1
+                'l1',         // Структура2
+                'l2',         // Структура3
+                'type_bps',   // Тип підрозділа
+                'surname',    // Прізвище
+                'firstname',  // Ім'я
+                'middlename', // По-батькові
+                'mil_name',   // Позивний
+                'phone',      // Телефон
+                'phone2',     // Телефон2
+                'phone3',     // Телефон3
+                'comments',   // Коментар
+                'rank',       // Звання
+                'position'    // Посада
+            ];
+
+            let visibleColumns = [];
+            preferredOrder.forEach(colName => {
+                const found = rawColumns.find(c => c.toLowerCase() === colName.toLowerCase());
+                if (found && !visibleColumns.includes(found)) {
+                    visibleColumns.push(found);
+                }
+            });
+            rawColumns.forEach(col => {
+                if (!visibleColumns.includes(col)) {
+                    visibleColumns.push(col);
+                }
             });
             window.tableColumns = visibleColumns;
             
-            // Заголовки + колонка для дій
+            // Заголовки + колонка для дій з потрібними назвами
             tableHead.innerHTML = '<tr>' + 
-                visibleColumns.map(col => `<th data-column="${col}">${col} <span class="sort-icon">↕</span></th>`).join('') + 
+                visibleColumns.map(col => {
+                    const name = col.toLowerCase();
+                    let displayName = col;
+                    if (name === 'v4_verh2') {
+                        displayName = "Структура1";
+                    } else if (name === 'l1') {
+                        displayName = "Структура2";
+                    } else if (name === 'l2') {
+                        displayName = "Структура3";
+                    } else if (name === 'type_bps') {
+                        displayName = "Наявність НРК";
+                    } else if (name === 'surname') {
+                        displayName = "Прізвище";
+                    } else if (name === 'middlename') {
+                        displayName = "По-батькові";
+                    } else if (name === 'firstname') {
+                        displayName = "Ім'я";
+                    } else if (name === 'mil_name') {
+                        displayName = "Позивний";
+                    } else if (name === 'phone') {
+                        displayName = "Телефон";
+                    } else if (name === 'phone2') {
+                        displayName = "Телефон2";
+                    } else if (name === 'phone3') {
+                        displayName = "Телефон3";
+                    } else if (name === 'comments') {
+                        displayName = "Коментар";
+                    } else if (name === 'rank') {
+                        displayName = "Звання";
+                    } else if (name === 'position') {
+                        displayName = "Посада";
+                    } else if (name === 'comment') {
+                        displayName = "Коментар2";
+                    }
+                    return `<th data-column="${col}">${displayName} <span class="sort-icon">↕</span></th>`;
+                }).join('') + 
                 '<th>Дії</th></tr>';
 
             // Додаємо обробники для сортування
@@ -385,7 +622,7 @@ async function loadVONRKQuery() {
     bs.type_bps,
     tt.*
 FROM subordination s
-LEFT JOIN unit u  ON u.id = s.id
+LEFT JOIN unit u  ON u.id = s.unit_id
 LEFT JOIN unit uu ON uu.id = s.parent_id
 LEFT JOIN bps_structure bs ON bs.unit_id = u.id
 LEFT JOIN (
@@ -396,24 +633,26 @@ LEFT JOIN (
         cp.surname,
         cp.mil_name,
         cp.phone,
-        IIF(cp.type_bps = 'bps', N'бпсник', '') AS comments,
+        cp.phone2,
+        cp.phone3,
         r.name AS rank,
         p.name AS position,
         u.off_name AS v4,
         uu.off_name AS v4_verh,
         uuu.off_name AS v4_verh2,
-        cp.comment
+        cp.comment,
+        cp.type_bps
     FROM contact_person cp 
     LEFT JOIN position p ON cp.position_id = p.id
     LEFT JOIN rank r ON r.id = cp.rank_id
     LEFT JOIN unit u ON u.id = cp.unit_id
-    LEFT JOIN subordination s ON s.id = u.id
+    LEFT JOIN subordination s ON s.unit_id = u.id
     LEFT JOIN unit uu ON uu.id = s.parent_id
-    LEFT JOIN subordination ss ON ss.id = uu.id
+    LEFT JOIN subordination ss ON ss.unit_id = uu.id
     LEFT JOIN unit uuu ON uuu.id = ss.parent_id
     WHERE u.comment NOT LIKE N'%морська%'
 ) tt ON tt.v4 = u.off_name
-WHERE bs.type_bps = 'nrk' OR tt.comments = N'бпсник'`;
+WHERE bs.type_bps = 'nrk' OR tt.type_bps = 'bps'`;
         
         const response = await fetch('/api/query', {
             method: 'POST',
@@ -440,27 +679,27 @@ WHERE bs.type_bps = 'nrk' OR tt.comments = N'бпсник'`;
             window.tableData = data.data;
             
             // Формуємо порядок і набір видимих колонок:
-            // 1) приховуємо технічне поле ID, а також v4 і v4_verh
+            // 1) приховуємо технічне поле ID, v4, v4_verh, comment (Коментар2) та type_bps (Тип підрозділа)
             // 2) будуємо явний порядок колонок для ВО НРК
             const rawColumns = data.columns.filter(col => {
                 const name = col.toLowerCase();
-                return name !== 'id' && name !== 'v4' && name !== 'v4_verh';
+                return name !== 'id' && name !== 'v4' && name !== 'v4_verh' && name !== 'comment' && name !== 'type_bps';
             });
 
             const preferredOrder = [
                 'v4_verh2',   // Структура1
                 'l1',         // Структура2
                 'l2',         // Структура3
-                'type_bps',   // Тип підрозділа
                 'surname',    // Прізвище
-                'middlename', // По-батькові
                 'firstname',  // Ім'я
+                'middlename', // По-батькові
                 'mil_name',   // Позивний
                 'phone',      // Телефон
+                'phone2',     // Телефон2
+                'phone3',     // Телефон3
                 'comments',   // Коментар
                 'rank',       // Звання
-                'position',   // Посада
-                'comment'     // Коментар2
+                'position'    // Посада
             ];
 
             let visibleColumns = [];
@@ -503,6 +742,10 @@ WHERE bs.type_bps = 'nrk' OR tt.comments = N'бпсник'`;
                         displayName = "Позивний";
                     } else if (name === 'phone') {
                         displayName = "Телефон";
+                    } else if (name === 'phone2') {
+                        displayName = "Телефон2";
+                    } else if (name === 'phone3') {
+                        displayName = "Телефон3";
                     } else if (name === 'comments') {
                         displayName = "Коментар";
                     } else if (name === 'rank') {
@@ -549,14 +792,14 @@ async function loadNRCStructureQuery() {
 
     try {
         const query = `SELECT 
-            s.id,
+            s.unit_id,
             uu.off_name AS l1,
             u.off_name  AS l2,
             bs.type_bps,
             bs.unit_structure_id,
             us.name AS unit_structure_name
         FROM subordination s
-        LEFT JOIN unit u  ON u.id = s.id
+        LEFT JOIN unit u  ON u.id = s.unit_id
         LEFT JOIN unit uu ON uu.id = s.parent_id
         LEFT JOIN bps_structure bs ON bs.unit_id = u.id
         LEFT JOIN unit_structure us ON bs.unit_structure_id = us.id`;
@@ -748,7 +991,7 @@ async function loadCustomQuery() {
                           cp.surname,
                           cp.phone
                        FROM unit u
-                       JOIN subordination s ON u.id = s.id
+                       JOIN subordination s ON u.id = s.unit_id
                        JOIN unit uu ON uu.id = s.parent_id 
                        LEFT JOIN contact_person cp 
                             ON cp.unit_id = u.id AND cp.type_bps = 'bps'`;
@@ -788,6 +1031,10 @@ async function loadCustomQuery() {
                     displayName = "По-батькові";
                 } else if (name === 'phone') {
                     displayName = "Телефон";
+                } else if (name === 'phone2') {
+                    displayName = "Телефон2";
+                } else if (name === 'phone3') {
+                    displayName = "Телефон3";
                 }
                 return `<th data-column="${col}">${displayName} <span class="sort-icon">↕</span></th>`;
             }).join('');
@@ -836,50 +1083,69 @@ function addSearchRow() {
     searchRow.className = 'search-row';
     
     if (window.tableColumns) {
+        const noUniqueFilterColumns = ['surname', 'firstname', 'middlename', 'mil_name', 'l2', 'phone', 'phone2', 'phone3'];
         window.tableColumns.forEach(col => {
             const td = document.createElement('td');
+            const wrapper = document.createElement('div');
+            wrapper.className = 'search-filter-cell';
             const colLower = col.toLowerCase();
-            
-            // Для некоторых колонок создаем выпадающие списки по уникальным значениям
-            if (colLower === 'material_subtype_name' || colLower === 'unit_structure_name') {
+            const skipUniqueSelect = noUniqueFilterColumns.includes(colLower);
+
+            if (!skipUniqueSelect) {
                 const select = document.createElement('select');
                 select.className = 'search-select';
                 select.dataset.column = col;
+                select.title = 'Фільтр за унікальними значеннями';
                 select.addEventListener('change', handleSearch);
-                
-                // Текст заголовка для "все" в зависимости от колонки
+
                 const optionAll = document.createElement('option');
                 optionAll.value = '';
-                optionAll.textContent = colLower === 'material_subtype_name' ? 'Всі типи' : 'Всі структури';
+                optionAll.textContent = '— Всі —';
                 select.appendChild(optionAll);
-                
-                // Получаем уникальные значения из данных
+
                 if (window.tableData && window.tableData.length > 0) {
+                    const hasEmpty = window.tableData.some(row => {
+                        const v = row[col];
+                        return v === null || v === undefined || v === '';
+                    });
+                    if (hasEmpty) {
+                        const optEmpty = document.createElement('option');
+                        optEmpty.value = '__empty__';
+                        optEmpty.textContent = 'Пусто';
+                        select.appendChild(optEmpty);
+                    }
                     const uniqueValues = [...new Set(window.tableData
                         .map(row => row[col])
                         .filter(val => val !== null && val !== undefined && val !== '')
-                    )].sort();
-                    
+                    )].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+
                     uniqueValues.forEach(value => {
                         const option = document.createElement('option');
-                        option.value = value;
-                        option.textContent = value;
+                        const strVal = String(value);
+                        option.value = strVal;
+                        let displayText = strVal;
+                        if (colLower === 'type_bps' && strVal.toLowerCase() === 'nrk') {
+                            displayText = 'є';
+                        } else if (strVal.length > 80) {
+                            displayText = strVal.slice(0, 77) + '…';
+                        }
+                        option.textContent = displayText;
                         select.appendChild(option);
                     });
                 }
-                
-                td.appendChild(select);
-            } else {
-                // Для остальных колонок создаем обычный input
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.className = 'search-input';
-                input.placeholder = 'Пошук...';
-                input.dataset.column = col;
-                input.addEventListener('input', handleSearch);
-                td.appendChild(input);
+                wrapper.appendChild(select);
             }
-            
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'search-input';
+            input.placeholder = 'Пошук...';
+            input.dataset.column = col;
+            input.title = 'Контекстний пошук (входить у текст)';
+            input.addEventListener('input', handleSearch);
+            wrapper.appendChild(input);
+
+            td.appendChild(wrapper);
             searchRow.appendChild(td);
         });
         
@@ -917,50 +1183,55 @@ function addSearchRow() {
     }
 }
 
-// Обробка пошуку
-function handleSearch(e) {
-    const searchValue = e.target.value.toLowerCase();
-    const column = e.target.dataset.column;
-    
-    // Отримуємо всі значення пошуку
-    const searchInputs = document.querySelectorAll('.search-input');
-    const searchSelects = document.querySelectorAll('.search-select');
-    const searchFilters = {};
-    
-    searchInputs.forEach(input => {
-        if (input.value.trim()) {
-            searchFilters[input.dataset.column] = input.value.toLowerCase();
-        }
-    });
-    
-    searchSelects.forEach(select => {
+// Збір значень фільтрів: точний вибір (select, включно "Пусто") + контекстний пошук (input)
+function getSearchFilters() {
+    const exact = {};
+    const contains = {};
+    document.querySelectorAll('.search-select').forEach(select => {
         if (select.value.trim()) {
-            searchFilters[select.dataset.column] = select.value;
+            exact[select.dataset.column] = select.value;
         }
     });
-    
-    // Фільтруємо дані
-    let filteredData = window.tableData.filter(row => {
-        for (let col in searchFilters) {
+    document.querySelectorAll('.search-input').forEach(input => {
+        if (input.value.trim()) {
+            contains[input.dataset.column] = input.value.trim().toLowerCase();
+        }
+    });
+    return { exact, contains };
+}
+
+// Застосування фільтрів до даних (exact + contains; exact може бути __empty__ для "Пусто")
+function applySearchFilters(data, filters) {
+    if (!data) return [];
+    const { exact, contains } = filters;
+    return data.filter(row => {
+        for (const col in exact) {
+            const value = row[col];
+            if (exact[col] === '__empty__') {
+                const isEmpty = value === null || value === undefined || String(value).trim() === '';
+                if (!isEmpty) return false;
+            } else {
+                if (value === null || value === undefined) {
+                    return false;
+                }
+                if (String(value) !== exact[col]) return false;
+            }
+        }
+        for (const col in contains) {
             const value = row[col];
             if (value === null || value === undefined) {
                 return false;
             }
-            
-            // Для select используем точное совпадение, для input - includes
-            const isSelect = document.querySelector(`.search-select[data-column="${col}"]`);
-            if (isSelect) {
-                if (String(value) !== searchFilters[col]) {
-                    return false;
-                }
-            } else {
-                if (!String(value).toLowerCase().includes(searchFilters[col])) {
-                    return false;
-                }
-            }
+            if (!String(value).toLowerCase().includes(contains[col])) return false;
         }
         return true;
     });
+}
+
+// Обробка пошуку (унікальні значення + контекстний пошук)
+function handleSearch(e) {
+    const filters = getSearchFilters();
+    const filteredData = applySearchFilters(window.tableData, filters);
     
     // Застосовуємо сортування, якщо воно є
     if (window.currentSortColumn) {
@@ -1008,29 +1279,8 @@ function sortTable(column) {
         currentTh.classList.add(sortDirection === 'asc' ? 'sorted-asc' : 'sorted-desc');
     }
     
-    // Отримуємо відфільтровані дані
-    const searchInputs = document.querySelectorAll('.search-input');
-    const searchFilters = {};
-    
-    searchInputs.forEach(input => {
-        if (input.value.trim()) {
-            searchFilters[input.dataset.column] = input.value.toLowerCase();
-        }
-    });
-    
-    let dataToSort = window.tableData.filter(row => {
-        for (let col in searchFilters) {
-            const value = row[col];
-            if (value === null || value === undefined) {
-                return false;
-            }
-            if (!String(value).toLowerCase().includes(searchFilters[col])) {
-                return false;
-            }
-        }
-        return true;
-    });
-    
+    const filters = getSearchFilters();
+    const dataToSort = applySearchFilters(window.tableData, filters);
     const sortedData = sortData(dataToSort, column, sortDirection);
     
     // Використовуємо renderNRCTable для таблиці НРК, інакше renderTable
@@ -1061,8 +1311,9 @@ function sortData(data, column, direction) {
     });
 }
 
-// Відображення таблиці
+// Відображення таблиці (зберігаємо дані для експорту — саме те, що відображається)
 function renderTable(data, columns) {
+    window.displayedTableData = data || [];
     const tableBody = document.getElementById('tableBody');
     
     if (!data || data.length === 0) {
@@ -1072,9 +1323,12 @@ function renderTable(data, columns) {
             return '<tr data-row-index="' + index + '">' + 
                 columns.map(col => {
                     let value = row[col];
-                    // Для естетичного вигляду замінюємо null/undefined на порожній рядок
                     if (value === null || value === undefined) value = '';
-                    return `<td data-column="${col}">${value}</td>`;
+                    let cellContent = value;
+                    if (col.toLowerCase() === 'type_bps' && String(value).toLowerCase() === 'nrk') {
+                        cellContent = '<span title="НРК">є</span>';
+                    }
+                    return `<td data-column="${col}">${cellContent}</td>`;
                 }).join('') + 
                 '<td>' +
                     '<button class="edit-btn" data-row-data=\'' + JSON.stringify(row).replace(/'/g, "&#39;") + '\' title="Редагувати">✏️</button> ' +
@@ -1095,7 +1349,7 @@ function renderTable(data, columns) {
                     const rowData = JSON.parse(this.getAttribute('data-row-data'));
                     
                     // Для таблицы ВО (contact_person) загружаем полную запись с ID
-                    if ((currentMenuItem === 'ВО' || currentMenuItem === 'ВО нрк') && currentTable === 'contact_person') {
+                    if ((currentMenuItem === 'ВО загальні' || currentMenuItem === 'ВО нрк') && currentTable === 'contact_person') {
                         const whereConditions = {};
                         
                         // Используем ID если он есть
@@ -1154,8 +1408,9 @@ function renderTable(data, columns) {
     }, 100);
 }
 
-// Відображення таблиці НРК з посиланнями та кнопками редагування
+// Відображення таблиці НРК з посиланнями та кнопками редагування (зберігаємо дані для експорту)
 function renderNRCTable(data, columns) {
+    window.displayedTableData = data || [];
     const tableBody = document.getElementById('tableBody');
     
     if (!data || data.length === 0) {
@@ -1486,7 +1741,8 @@ async function openEditModal(rowData) {
     let positionData = [];
     let unitData = [];
     let unitStructureData = [];
-    
+    const hasUnitId = currentTableInfo.columns.some(c => c.name.toLowerCase() === 'unit_id');
+
     if (currentTable === 'contact_person') {
         try {
             const rankResponse = await fetch('/api/table-data/rank');
@@ -1508,6 +1764,16 @@ async function openEditModal(rowData) {
             }
         } catch (error) {
             console.error('Помилка завантаження даних для випадаючих списків:', error);
+        }
+    } else if (hasUnitId) {
+        try {
+            const unitResponse = await fetch('/api/table-data/unit');
+            const unitResult = await unitResponse.json();
+            if (unitResult.success) {
+                unitData = unitResult.data;
+            }
+        } catch (error) {
+            console.error('Помилка завантаження даних unit для випадаючого списку:', error);
         }
     }
     
@@ -1614,7 +1880,6 @@ async function openEditModal(rowData) {
             select.required = col.nullable === 'NO' && !col.default && !rowData;
             select.className = 'form-select';
             
-            // Добавляем пустую опцию если поле nullable
             if (col.nullable === 'YES') {
                 const emptyOption = document.createElement('option');
                 emptyOption.value = '';
@@ -1622,11 +1887,11 @@ async function openEditModal(rowData) {
                 select.appendChild(emptyOption);
             }
             
-           
+            // У всіх формах: список unit.off_name (value = id)
             unitData.forEach(unit => {
                 const option = document.createElement('option');
                 option.value = unit.id;
-                option.textContent = unit.name;
+                option.textContent = (unit.off_name !== undefined && unit.off_name !== null ? unit.off_name : unit.name || '').toString().trim() || '(порожньо)';
                 select.appendChild(option);
             });
              
@@ -1855,7 +2120,7 @@ async function handleSave(e) {
             window.savedScrollPosition = scrollPosition; // Сохраняем в глобальной переменной
             
             // Оновлюємо дані таблиці
-            if (currentMenuItem === 'ВО') {
+            if (currentMenuItem === 'ВО загальні') {
                 await loadVOQuery();
             } else if (currentMenuItem === 'ВО нрк') {
                 await loadVONRKQuery();
@@ -1949,7 +2214,7 @@ async function handleDelete(rowData) {
             window.savedScrollPosition = scrollPosition; // Сохраняем в глобальной переменной
             
             // Оновлюємо дані таблиці
-            if (currentMenuItem === 'ВО') {
+            if (currentMenuItem === 'ВО загальні') {
                 await loadVOQuery();
             } else if (currentMenuItem === 'ВО нрк') {
                 await loadVONRKQuery();
