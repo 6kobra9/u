@@ -46,6 +46,9 @@ function setupEventListeners() {
         link.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
+            if (this.classList.contains('nav-link-disabled') || this.getAttribute('data-enabled') === 'false') {
+                return;
+            }
             const menuItem = this.textContent.trim();
             handleMenuItemClick(menuItem);
             // Закриваємо всі меню після вибору

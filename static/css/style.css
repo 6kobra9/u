@@ -191,6 +191,13 @@ header {
     background: transparent;
 }
 
+.mega-menu-list a.nav-link-disabled {
+    color: #9a9288;
+    cursor: not-allowed;
+    pointer-events: none;
+    opacity: 0.65;
+}
+
 .mega-menu-separator {
     height: 1px;
     background: #4a4032;
