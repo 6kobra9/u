@@ -380,6 +380,41 @@ def update_nrc_structure():
         return jsonify({'success': True, 'message': 'Структуру НРК успішно оновлено'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/update-material-group', methods=['POST'])
+def update_material_group():
+    """
+    Оновлення групи засобу для матеріалу.
+    Вважаємо, що для одного material_id використовується одна група у таблиці material_group_rel.
+    """
+    try:
+        data = request.json or {}
+        material_id = data.get('material_id')
+        group_id = data.get('group_id')
+
+        if not material_id:
+            return jsonify({'success': False, 'error': 'Не вказано material_id'}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Спочатку видаляємо існуючі звʼязки для цього material_id
+        cursor.execute("DELETE FROM material_group_rel WHERE material_id = ?", (material_id,))
+
+        # Якщо group_id заданий (не None і не порожній рядок) — вставляємо новий звʼязок
+        if group_id is not None and group_id != '':
+            cursor.execute(
+                "INSERT INTO material_group_rel (material_id, group_id) VALUES (?, ?)",
+                (material_id, group_id)
+            )
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'success': True, 'message': 'Групу засобу оновлено'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 @app.route('/api/delete', methods=['POST'])
 def delete_data():
     """Удалить данные из таблицы"""

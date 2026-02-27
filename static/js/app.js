@@ -41,7 +41,49 @@ function setupEventListeners() {
         });
     });
 
-    // Обробка кліку на підпункти меню
+    // Обробка кліку на підпункти меню (як у верхньому, так і в боковому меню)
+    const sidePanel = document.getElementById('sidePanel');
+    const sidePanelBackdrop = document.getElementById('sidePanelBackdrop');
+    const menuToggle = document.getElementById('menuToggle');
+    const sidePanelClose = document.getElementById('sidePanelClose');
+
+    function openSidePanel() {
+        if (sidePanel) sidePanel.classList.add('open');
+        if (sidePanelBackdrop) sidePanelBackdrop.classList.add('open');
+    }
+
+    function closeSidePanel() {
+        if (sidePanel) sidePanel.classList.remove('open');
+        if (sidePanelBackdrop) sidePanelBackdrop.classList.remove('open');
+    }
+
+    if (menuToggle) {
+        menuToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openSidePanel();
+        });
+    }
+
+    if (sidePanelClose) {
+        sidePanelClose.addEventListener('click', function(e) {
+            e.preventDefault();
+            closeSidePanel();
+        });
+    }
+
+    if (sidePanelBackdrop) {
+        sidePanelBackdrop.addEventListener('click', function() {
+            closeSidePanel();
+        });
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeSidePanel();
+        }
+    });
+
     document.querySelectorAll('.mega-menu-list a').forEach(link => {
         link.addEventListener('click', function(e) {
             e.preventDefault();
@@ -51,51 +93,9 @@ function setupEventListeners() {
             }
             const menuItem = this.textContent.trim();
             handleMenuItemClick(menuItem);
-            // Закриваємо всі меню після вибору
-            document.querySelectorAll('.nav-item.dropdown').forEach(dropdown => {
-                dropdown.classList.remove('active');
-                const menu = dropdown.querySelector('.dropdown-menu');
-                if (menu) {
-                    menu.style.display = 'none';
-                }
-            });
+            // Після вибору пункту закриваємо бокову панель (якщо відкрита)
+            closeSidePanel();
         });
-    });
-    
-    // Зберігаємо меню відкритим при наведенні (для всіх dropdown)
-    document.querySelectorAll('.nav-item.dropdown').forEach(dropdown => {
-        let hideTimeout;
-        
-        dropdown.addEventListener('mouseenter', function() {
-            clearTimeout(hideTimeout);
-            const menu = this.querySelector('.dropdown-menu');
-            if (menu) {
-                menu.style.display = 'block';
-            }
-        });
-        
-        dropdown.addEventListener('mouseleave', function() {
-            const menu = this.querySelector('.dropdown-menu');
-            if (menu) {
-                hideTimeout = setTimeout(() => {
-                    menu.style.display = 'none';
-                }, 200);
-            }
-        });
-        
-        const menu = dropdown.querySelector('.dropdown-menu');
-        if (menu) {
-            menu.addEventListener('mouseenter', function() {
-                clearTimeout(hideTimeout);
-                this.style.display = 'block';
-            });
-            
-            menu.addEventListener('mouseleave', function() {
-                hideTimeout = setTimeout(() => {
-                    this.style.display = 'none';
-                }, 200);
-            });
-        }
     });
 
    
@@ -597,9 +597,11 @@ LEFT JOIN (
 
             // Додаємо рядок пошуку
             addSearchRow();
-            
-            // Відображаємо дані
-            renderTable(data.data, visibleColumns);
+
+            // Якщо були збережені фільтри — застосовуємо їх, інакше показуємо всі дані
+            if (!applySavedSearchFiltersIfAny()) {
+                renderTable(data.data, visibleColumns);
+            }
         } else {
             tableHead.innerHTML = '';
             tableBody.innerHTML = '<tr><td colspan="100" style="color: #dc3545; padding: 20px;">Помилка: ' + data.error + '</td></tr>';
@@ -772,9 +774,11 @@ WHERE bs.type_bps = 'nrk' OR tt.type_bps = 'bps'`;
 
             // Додаємо рядок пошуку
             addSearchRow();
-            
-            // Відображаємо дані
-            renderTable(data.data, visibleColumns);
+
+            // Якщо були збережені фільтри — застосовуємо їх, інакше показуємо всі дані
+            if (!applySavedSearchFiltersIfAny()) {
+                renderTable(data.data, visibleColumns);
+            }
         } else {
             tableHead.innerHTML = '';
             tableBody.innerHTML = '<tr><td colspan="100" style="color: #dc3545; padding: 20px;">Помилка: ' + data.error + '</td></tr>';
@@ -853,9 +857,11 @@ async function loadNRCStructureQuery() {
 
             // Додаємо рядок пошуку
             addSearchRow();
-            
-            // Відображаємо дані
-            renderTable(data.data, visibleColumns);
+
+            // Якщо були збережені фільтри — застосовуємо їх, інакше показуємо всі дані
+            if (!applySavedSearchFiltersIfAny()) {
+                renderTable(data.data, visibleColumns);
+            }
         } else {
             tableHead.innerHTML = '';
             tableBody.innerHTML = '<tr><td colspan="100" style="color: #dc3545; padding: 20px;">Помилка: ' + data.error + '</td></tr>';
@@ -877,16 +883,17 @@ async function loadNRCQuery() {
     tableBody.innerHTML = '';
 
     try {
-        const query = `SELECT id, name, off_name,
-            CASE 
-                WHEN material_subtype = 'logistic' THEN N'Логістичні'
-                WHEN material_subtype = 'ing' THEN N'Інженерні'
-                WHEN material_subtype = 'spec' THEN N'Спеціальні'
-                WHEN material_subtype = 'train' THEN N'Навчальні тренажери БпНК'
-            END AS material_subtype_name,
-            comment,
-            url 
-        FROM Material`;
+        const query = `SELECT 
+    material.id         AS id,
+    material.name       AS material_name,
+    material.code       AS code,
+    gg.name             AS group_name,
+    manufacture.name    AS manufacture_name,
+    url
+FROM Material AS material
+LEFT JOIN material_group_rel AS ff ON ff.material_id = material.id
+LEFT JOIN material_group      AS gg ON ff.group_id    = gg.id
+LEFT JOIN manufacture         AS manufacture ON material.manufacture_id = manufacture.id`;
         
         const response = await fetch('/api/query', {
             method: 'POST',
@@ -924,12 +931,15 @@ async function loadNRCQuery() {
             tableHead.innerHTML = '<tr>' + 
                 visibleColumns.map(col => {
                     let displayName = col;
-                    if (col.toLowerCase() === 'name') {
-                        displayName = 'Назва';
-                    } else if (col.toLowerCase() === 'material_subtype_name') {
-                        displayName = 'Тип';
-                    } else if (col.toLowerCase() === 'comment') {
-                        displayName = 'Коментар';
+                    const colLower = col.toLowerCase();
+                    if (colLower === 'material_name') {
+                        displayName = 'Матеріал';
+                    } else if (colLower === 'code') {
+                        displayName = 'Код';
+                    } else if (colLower === 'group_name') {
+                        displayName = 'Група';
+                    } else if (colLower === 'manufacture_name') {
+                        displayName = 'Виробник';
                     }
                     return `<th data-column="${col}">${displayName} <span class="sort-icon">↕</span></th>`;
                 }).join('') + 
@@ -945,13 +955,16 @@ async function loadNRCQuery() {
 
             // Додаємо рядок пошуку
             addSearchRow();
-            
+
             // Сохраняем позицию скролла перед рендерингом (только если это не первая загрузка)
             const tableContainer = document.querySelector('.table-container');
             const scrollPosition = tableContainer && window.savedScrollPosition !== undefined ? window.savedScrollPosition : 0;
             
-            // Відображаємо дані з посиланнями та кнопками редагування для НРК
-            renderNRCTable(data.data, visibleColumns);
+            // Якщо були збережені фільтри — застосовуємо їх, інакше показуємо всі дані
+            if (!applySavedSearchFiltersIfAny()) {
+                // Відображаємо дані з посиланнями та кнопками редагування для НРК
+                renderNRCTable(data.data, visibleColumns);
+            }
             
             // Восстанавливаем позицию скролла после рендеринга
             if (scrollPosition > 0) {
@@ -1201,6 +1214,51 @@ function getSearchFilters() {
         }
     });
     return { exact, contains };
+}
+
+// Збережені фільтри між перезавантаженнями таблиці
+window.savedSearchFilters = null;
+
+// Застосування збережених фільтрів до поточного рядка пошуку (якщо є)
+function applySavedSearchFiltersIfAny() {
+    if (!window.savedSearchFilters) {
+        return false;
+    }
+
+    const { exact, contains } = window.savedSearchFilters;
+
+    // Відновлюємо значення select'ів
+    document.querySelectorAll('.search-select').forEach(select => {
+        const col = select.dataset.column;
+        if (exact && Object.prototype.hasOwnProperty.call(exact, col)) {
+            select.value = exact[col];
+        }
+    });
+
+    // Відновлюємо значення input'ів
+    document.querySelectorAll('.search-input').forEach(input => {
+        const col = input.dataset.column;
+        if (contains && Object.prototype.hasOwnProperty.call(contains, col)) {
+            input.value = contains[col];
+        }
+    });
+
+    // Після відновлення значень одразу застосовуємо фільтрацію
+    const filters = getSearchFilters();
+    let filteredData = applySearchFilters(window.tableData, filters);
+
+    // Застосовуємо сортування, якщо воно є
+    if (window.currentSortColumn) {
+        filteredData = sortData(filteredData, window.currentSortColumn, window.sortDirection);
+    }
+
+    if (currentMenuItem === 'НРК') {
+        renderNRCTable(filteredData, window.tableColumns);
+    } else {
+        renderTable(filteredData, window.tableColumns);
+    }
+
+    return true;
 }
 
 // Застосування фільтрів до даних (exact + contains; exact може бути __empty__ для "Пусто")
@@ -1739,11 +1797,13 @@ async function openEditModal(rowData) {
         return;
     }
 
-    // Загружаем данные для выпадающих списков
+    // Загружаем дані для випадаючих списків
     let rankData = [];
     let positionData = [];
     let unitData = [];
     let unitStructureData = [];
+    let materialGroupData = [];
+    let manufactureData = [];
     const hasUnitId = currentTableInfo.columns.some(c => c.name.toLowerCase() === 'unit_id');
 
     if (currentTable === 'contact_person') {
@@ -1780,7 +1840,7 @@ async function openEditModal(rowData) {
         }
     }
     
-    // Загружаем данные для unit_structure для таблицы subordination
+    // Загружаем дані для unit_structure для таблиці subordination
     if (currentTable === 'subordination') {
         try {
             const unitStructureResponse = await fetch('/api/table-data/unit_structure');
@@ -1790,6 +1850,32 @@ async function openEditModal(rowData) {
             }
         } catch (error) {
             console.error('Помилка завантаження даних для unit_structure:', error);
+        }
+    }
+
+    // Загружаем дані для довідників груп засобів та виробників для таблиці Material
+    if (currentTable === 'Material') {
+        try {
+            const [groupResp, manufactureResp] = await Promise.all([
+                fetch('/api/table-data/material_group'),
+                fetch('/api/table-data/manufacture')
+            ]);
+
+            const groupResult = await groupResp.json();
+            if (groupResult.success) {
+                materialGroupData = groupResult.data || [];
+            }
+
+            const manufactureResult = await manufactureResp.json();
+            if (manufactureResult.success) {
+                manufactureData = manufactureResult.data || [];
+            }
+
+            // Якщо редагуємо існуючий матеріал і в нас ще немає group_id у rowData,
+            // можна в подальшому тут додати окреме завантаження поточної групи з бекенду,
+            // якщо це буде потрібно.
+        } catch (error) {
+            console.error('Помилка завантаження груп засобів / виробників:', error);
         }
     }
 
@@ -1816,7 +1902,7 @@ async function openEditModal(rowData) {
         const label = document.createElement('label');
         label.textContent = `${col.name} (${col.type}${col.nullable === 'YES' ? ', nullable' : ''})`;
         
-        // Для полей rank_id и position_id создаем select
+        // Для полів rank_id, position_id, unit_id, unit_structure_id, group_id, manufacture_id створюємо select
         if (col.name.toLowerCase() === 'rank_id' && rankData.length > 0) {
             const select = document.createElement('select');
             select.name = col.name;
@@ -1935,6 +2021,34 @@ async function openEditModal(rowData) {
             div.appendChild(label);
             div.appendChild(select);
             editFields.appendChild(div);
+        } else if (col.name.toLowerCase() === 'manufacture_id' && manufactureData.length > 0) {
+            // Вибір виробника з таблиці manufacture
+            const select = document.createElement('select');
+            select.name = col.name;
+            select.required = col.nullable === 'NO' && !col.default && !rowData;
+            select.className = 'form-select';
+
+            if (col.nullable === 'YES') {
+                const emptyOption = document.createElement('option');
+                emptyOption.value = '';
+                emptyOption.textContent = '-- Виберіть виробника --';
+                select.appendChild(emptyOption);
+            }
+
+            manufactureData.forEach(m => {
+                const option = document.createElement('option');
+                option.value = m.id;
+                option.textContent = m.name;
+                select.appendChild(option);
+            });
+
+            if (rowData && rowData[col.name] !== null && rowData[col.name] !== undefined) {
+                select.value = rowData[col.name];
+            }
+
+            div.appendChild(label);
+            div.appendChild(select);
+            editFields.appendChild(div);
         } else {
             // Для остальных полей создаем обычный input
             const input = document.createElement('input');
@@ -1953,6 +2067,45 @@ async function openEditModal(rowData) {
             div.appendChild(input);
             editFields.appendChild(div);
         }
+    }
+
+    // Окреме поле "Група засобу" для таблиці Material (звʼязок через material_group_rel, а не пряме поле таблиці)
+    if (currentTable === 'Material' && materialGroupData.length > 0) {
+        const div = document.createElement('div');
+        div.className = 'form-group';
+
+        const label = document.createElement('label');
+        label.textContent = 'Група засобу';
+
+        const select = document.createElement('select');
+        // Використовуємо спеціальне імʼя поля, яке не існує у таблиці Material,
+        // щоб не намагатися оновлювати неіснуючу колонку в БД.
+        select.name = 'material_group_id';
+        select.className = 'form-select';
+
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = '-- Виберіть групу засобу --';
+        select.appendChild(emptyOption);
+
+        materialGroupData.forEach(group => {
+            const option = document.createElement('option');
+            option.value = group.id;
+            option.textContent = group.name;
+            select.appendChild(option);
+        });
+
+        // Встановлюємо поточну групу за назвою, якщо є (group_name у рядку НРК)
+        if (rowData && rowData.group_name) {
+            const found = materialGroupData.find(g => g.name === rowData.group_name);
+            if (found) {
+                select.value = String(found.id);
+            }
+        }
+
+        div.appendChild(label);
+        div.appendChild(select);
+        editFields.appendChild(div);
     }
 
     modal.style.display = 'block';
@@ -2037,6 +2190,12 @@ async function handleSave(e) {
             return;
         }
 
+        // Для НРК (Material) поле material_group_id є службовим для звʼязку,
+        // воно не існує безпосередньо в таблиці Material, тому не відправляємо його у INSERT/UPDATE
+        if (currentTable === 'Material' && key.toLowerCase() === 'material_group_id') {
+            return;
+        }
+
         if (editingRow) {
             // При редагуванні ми хочемо мати можливість очищати поля,
             // тому навіть порожні значення відправляємо в запит.
@@ -2112,9 +2271,36 @@ async function handleSave(e) {
         const data = await response.json();
 
         if (data.success) {
-            showModal(data.message, 'success');
-            
-            // Закрываем форму редактирования после успешного сохранения
+            // Зберігаємо поточні фільтри, щоб не скидати їх після оновлення даних
+            window.savedSearchFilters = getSearchFilters();
+
+            // Якщо редагуємо засіб (Material) — окремо оновлюємо його групу через material_group_rel
+            if (editingRow && currentTable === 'Material') {
+                try {
+                    const formEl = document.getElementById('editForm');
+                    const groupSelect =
+                        formEl.querySelector('select[name="group_id"]') ||
+                        formEl.querySelector('select[name="material_group_id"]');
+
+                    if (groupSelect && editingRow.id) {
+                        const groupVal = groupSelect.value;
+                        await fetch('/api/update-material-group', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                material_id: editingRow.id,
+                                group_id: groupVal === '' ? null : groupVal
+                            })
+                        });
+                    }
+                } catch (e) {
+                    console.error('Помилка оновлення групи засобу:', e);
+                }
+            }
+
+            // Успішне збереження без показу повідомлення
             closeEditModal();
             
             // Сохраняем позицию скролла перед обновлением

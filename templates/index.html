@@ -9,55 +9,56 @@
     <div class="container">
         <header>
             <div class="header-left">
+                <button id="menuToggle" class="hamburger-btn" aria-label="Відкрити меню">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
                 <div class="logo">Управління беспілотних систем КСВ</div>
-                <nav class="main-nav">
-                    <div class="nav-item dropdown">
-                        <a href="#" class="nav-link">Довідники <span class="dropdown-arrow">▼</span></a>
-                        <div class="dropdown-menu">
-                            <div class="mega-menu-content">
-                                <div class="mega-menu-column">
-                                    <h3 class="mega-menu-title">Структура</h3>
-                                    <ul class="mega-menu-list">
-                                        <li><a href="#">Загальна</a></li>
-                                        <li><a href="#">Структура НРК</a></li>
-                                        <li><a href="#" class="nav-link-disabled" data-enabled="false" title="Пункт тимчасово недоступний">Структура БПЛА</a></li>
-                                    </ul>
-                                </div>
-                                <div class="mega-menu-column">
-                                    <h3 class="mega-menu-title">ВО</h3>
-                                    <ul class="mega-menu-list">
-                                    <li><a href="#">ВО загальні</a></li>
-                                    <li><a href="#">ВО нрк</a></li>
-                                    </ul>
-                                </div>
-                                <div class="mega-menu-column">
-                                    <h3 class="mega-menu-title">Засоби</h3>
-                                    <ul class="mega-menu-list">
-                                        <li><a href="#">НРК</a></li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div class="mega-menu-separator"></div>
-                        </div>
-                    </div>
-                    <a href="#" class="nav-item">Звіти</a>
-                    <div class="nav-item dropdown">
-                        <a href="#" class="nav-link">Завантаження даних<span class="dropdown-arrow">▼</span></a>
-                        <div class="dropdown-menu">
-                            <div class="mega-menu-content">
-                                <div class="mega-menu-column">
-                                    <ul class="mega-menu-list">
-                                        <li><a href="#">довідник засобів</a></li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </nav>
             </div>
             <div class="header-right">
             </div>
         </header>
+
+        <!-- Бокова панель меню -->
+        <div id="sidePanelBackdrop" class="side-panel-backdrop"></div>
+        <aside id="sidePanel" class="side-panel">
+            <div class="side-panel-header">
+                <span class="side-panel-title">Меню</span>
+                <button id="sidePanelClose" class="side-panel-close" aria-label="Закрити меню">&times;</button>
+            </div>
+            <nav class="side-nav">
+                <div class="mega-menu-content">
+                    <div class="mega-menu-column">
+                        <h3 class="mega-menu-title">Структура</h3>
+                        <ul class="mega-menu-list">
+                            <li><a href="#">Загальна</a></li>
+                            <li><a href="#">Структура НРК</a></li>
+                            <li><a href="#" class="nav-link-disabled" data-enabled="false" title="Пункт тимчасово недоступний">Структура БПЛА</a></li>
+                        </ul>
+                    </div>
+                    <div class="mega-menu-column">
+                        <h3 class="mega-menu-title">ВО</h3>
+                        <ul class="mega-menu-list">
+                            <li><a href="#">ВО загальні</a></li>
+                            <li><a href="#">ВО нрк</a></li>
+                        </ul>
+                    </div>
+                    <div class="mega-menu-column">
+                        <h3 class="mega-menu-title">Засоби</h3>
+                        <ul class="mega-menu-list">
+                            <li><a href="#">НРК</a></li>
+                        </ul>
+                    </div>
+                    <div class="mega-menu-column">
+                        <h3 class="mega-menu-title">Завантаження даних</h3>
+                        <ul class="mega-menu-list">
+                            <li><a href="#">довідник засобів</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </nav>
+        </aside>
 
         <div class="main-content">
             <!-- Основна область -->
